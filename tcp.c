@@ -45,18 +45,29 @@ int set_no_delay(int fd)
 	return 0;
 }
 
-int create_socket(struct sockaddr *bind_to, struct addrinfo *ai, int recv_buffer_size, int tx_buffer_size, int max_mtu, char use_no_delay, int priority, int tos)
+int create_socket(struct sockaddr *bind_to, struct addrinfo *ai, int recv_buffer_size, int tx_buffer_size, int max_mtu, char use_no_delay, int priority, int tos, char use_mptcp)
 {
 	int fd = -1;
 
 	/* create socket */
-	fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-	if (fd == -1)
+	if (use_mptcp)
 	{
+	  fd = socket(ai->ai_family, ai->ai_socktype, IPPROTO_MPTCP);
+	  if (fd == -1)
+	  {
 		set_error(gettext("problem creating socket (%s)"), strerror(errno));
 		return RC_INVAL;
+	  }
 	}
-
+	else
+	{
+ 	  fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+	  if (fd == -1)
+	  {
+		set_error(gettext("problem creating socket (%s)"), strerror(errno));
+		return RC_INVAL;
+	  }
+	}
 	/* go through a specific interface? */
 	if (bind_to)
 	{

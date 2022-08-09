@@ -220,6 +220,7 @@ void usage(const char *me)
 	fprintf(stderr, gettext(" *** networking settings ***\n"));
 	format_help(NULL, "--max-mtu", gettext("limit the MTU size"));
 	format_help(NULL, "--no-tcp-nodelay", gettext("do not disable Naggle"));
+	format_help(NULL, "--multipath", gettext("enable Multipath TCP"));
 	format_help(NULL, "--recv-buffer", gettext("receive buffer size"));
 	format_help(NULL, "--tx-buffer", gettext("transmit buffer size"));
 	format_help("-r", "--resolve-once", gettext("resolve hostname only once (useful when pinging roundrobin DNS: also takes the first DNS lookup out of the loop so that the first measurement is also correct)"));

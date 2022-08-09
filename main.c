@@ -188,10 +188,7 @@ void emit_json(char ok, int seq, double start_ts, stats_t *t_resolve, stats_t *t
 	printf("\"ssl_fingerprint\" : \"%s\", ", ssl_fp ? ssl_fp : "");
 	printf("\"time_offset\" : \"%f\", ", toff_diff_ts);
 	printf("\"tfo_success\" : \"%s\", ", tfo_success ? "true" : "false");
-	if (t_ssl != NULL && t_ssl -> cur_valid)
-		printf("\"ssl_ms\" : \"%e\", ", t_ssl -> cur);
-	printf("\"tfo_succes\" : \"%s\", ", tfo_success ? "true" : "false");
-	if (t_ssl !=NULL && t_ssl -> cur_valid)
+       	if (t_ssl != NULL && t_ssl -> cur_valid)
 		printf("\"ssl_ms\" : \"%e\", ", t_ssl -> cur);
 	if (t_write != NULL)
 		printf("\"write\" : \"%e\", ", t_write -> cur);
@@ -945,6 +942,7 @@ int main(int argc, char *argv[])
 	char adaptive_interval = 0;
 	double show_slow_log = MY_DOUBLE_INF;
 	char use_tcp_nodelay = 1;
+	char use_mptcp = 0;
 	int max_mtu = -1;
 	int write_sleep = 500; /* in us (microseconds), determines resolution of transmit time determination */
 	char keep_cookies = 0;
@@ -1034,6 +1032,7 @@ int main(int argc, char *argv[])
 		{"tos", 1, NULL, 24 },
 		{"header", 1, NULL, 25 },
 		{"ca-path", 1, NULL, 26 },
+		{"multipath", 0, NULL, 27 },
 #ifdef NC
 		{"ncurses",	0, NULL, 'K' },
 		{"gui",	0, NULL, 'K' },
@@ -1081,6 +1080,10 @@ int main(int argc, char *argv[])
 				http2 = 1;
 				break;
 
+		        case 27:
+        			use_mptcp = 1;
+				break;
+				
 			case 26:
 				ca_path = optarg;
 				break;
@@ -1136,7 +1139,7 @@ int main(int argc, char *argv[])
 #endif
 
 			case 13:
-				show_slow_log = atof(optarg);
+			        show_slow_log = atof(optarg);
 				break;
 
 			case 12:
@@ -1633,6 +1636,7 @@ int main(int argc, char *argv[])
 			double dummy_ms = 0.0;
 			double their_est_ts = -1.0, toff_diff_ts = -1.0;
 			char tfo_success = 0;
+			char mptcp_success = 0;
 			double ssl_handshake = 0.0;
 			char cur_have_resolved = 0;
 #if defined(linux) || defined(__FreeBSD__)
@@ -1734,7 +1738,7 @@ persistent_loop:
 				int rc = -1;
 				struct addrinfo *ai_dummy = proxy_host ? ai_use_proxy : ai_use;
 
-				fd = create_socket((struct sockaddr *)bind_to, ai_dummy, recv_buffer_size, tx_buffer_size, max_mtu, use_tcp_nodelay, priority, send_tos);
+				fd = create_socket((struct sockaddr *)bind_to, ai_dummy, recv_buffer_size, tx_buffer_size, max_mtu, use_tcp_nodelay, priority, send_tos, use_mptcp);
 				if (fd < 0)
 					rc = fd; /* FIXME need to fix this, this is ugly */
 				else if (proxy_host)
@@ -1930,6 +1934,9 @@ persistent_loop:
 					else if (in_transit_cnt <= MAX_SHOW_SUPPRESSION)
 						slow_log(gettext("\nHTTP server started sending data with %d bytes still in transit"), info.tcpi_unacked);
 				}
+				
+				
+				
 #endif
 
 				if (t_rc == 0)
@@ -2146,7 +2153,7 @@ persistent_loop:
 				if (info.tcpi_options & TCPI_OPT_SYN_DATA)
 					tfo_success = 1;
 #endif
-
+			
 				update_statst(&tcp_rtt_stats, (double)info.tcpi_rtt / 1000.0);
 
 #ifdef linux
@@ -2156,6 +2163,16 @@ persistent_loop:
 			}
 #endif
 
+			// mptcp stats
+			struct mptcp_info mptcp_info;
+			socklen_t mptcp_info_len;
+			mptcp_info_len=sizeof(mptcp_info);
+			if ( getsockopt(fd, SOL_MPTCP, MPTCP_INFO, &mptcp_info, &mptcp_info_len) == 0)
+		        {
+			    mptcp_success = 1; 
+			}
+				
+			
 			if (!persistent_connections)
 				stats_close(&fd, &t_close, 0);
 
@@ -2214,6 +2231,7 @@ persistent_loop:
 				const char *ms_color = c_green;
 				char current_host[4096] = { 0 };
 				char *operation = !persistent_connections ? gettext("connected to") : gettext("pinged host");
+
 				const char *sep = c_bright, *unsep = c_normal;
 
 				if (show_ts || ncurses_mode)
@@ -2335,6 +2353,9 @@ persistent_loop:
 					str_add(&line, " F");
 #endif
 
+				if (mptcp_success)
+					str_add(&line, " M");
+				
 #ifdef NC
 				if (ncurses_mode)
 				{
